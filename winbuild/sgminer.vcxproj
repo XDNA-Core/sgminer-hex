@@ -294,6 +294,7 @@
     <ClCompile Include="..\algorithm\whirlcoin.c" />
     <ClCompile Include="..\algorithm\whirlpoolx.c" />
     <ClCompile Include="..\algorithm\x14.c" />
+    <ClCompile Include="..\algorithm\hex.c" />
     <ClCompile Include="..\api.c" />
     <ClCompile Include="..\ccan\opt\helpers.c" />
     <ClCompile Include="..\ccan\opt\opt.c" />
@@ -370,6 +371,7 @@
     <ClInclude Include="..\algorithm\whirlcoin.h" />
     <ClInclude Include="..\algorithm\whirlpoolx.h" />
     <ClInclude Include="..\algorithm\x14.h" />
+    <ClInclude Include="..\algorithm\hex.h" />
     <ClInclude Include="..\api.h" />
     <ClInclude Include="..\arg-nonnull.h" />
     <ClInclude Include="..\bench_block.h" />

@@ -39,7 +39,7 @@
 #include "algorithm/credits.h"
 #include "algorithm/blake256.h"
 #include "algorithm/blakecoin.h"
-#include "algorithm/x16m.h"
+#include "algorithm/hex.h"
 #include "algorithm/sia.h"
 #include "algorithm/decred.h"
 #include "algorithm/pascal.h"
@@ -1031,17 +1031,41 @@ static cl_int queue_decred_kernel(_clState *clState, dev_blk_ctx *blk, __maybe_u
   return status;
 }
 
-static cl_int queue_x16m_kernel(struct __clState *clState, struct _dev_blk_ctx *blk, __maybe_unused cl_uint threads)
+static cl_int queue_hex_kernel(struct __clState *clState, struct _dev_blk_ctx *blk, __maybe_unused cl_uint threads)
 {
 	cl_kernel *kernel;
 	unsigned int num;
 	cl_ulong le_target;
 	cl_int status = 0;
-	uint8_t hashOrder[X16M_HASH_FUNC_COUNT];
+	uint8_t hashOrder[HEX_HASH_FUNC_COUNT];
+	if (clState->MidstateBuf)
+		clReleaseMemObject(clState->MidstateBuf);
+	if (clState->buffer1)
+		clReleaseMemObject(clState->buffer1);
+
+	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads+2)*sizeof(cl_uint)*16, NULL, &status); // we don't need that much just tired...
+	if (status != CL_SUCCESS && !clState->MidstateBuf) {
+		applog(LOG_DEBUG, "Error %d: clCreateBuffer (MidstateBuf), decrease TC or increase LG", status);
+		return NULL;
+	}
+	clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads + 2) * sizeof(cl_uint) * 16, NULL, &status); // we don't need that much just tired...
+	if (status != CL_SUCCESS && !clState->buffer1) {
+		applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
+		return NULL;
+	}
+	if (!clState->buffer1)
+	{
+		applog(LOG_ERR, "-");
+	}
+	cl_mem* cur;
+	cl_mem* next;
+	cur = &(clState->MidstateBuf);
+	next = &(clState->buffer1);
+
 
 	le_target = *(cl_ulong *)(blk->work->device_target + 24);
 	flip80(clState->cldata, blk->work->data);
-	x16m_getalgolist(&clState->cldata[4], hashOrder);
+	hex_getalgolist(&clState->cldata[4], hashOrder);
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->CLbuffer0, true, 0, 80, clState->cldata, 0, NULL, NULL);
 	if (status != CL_SUCCESS)
@@ -1049,33 +1073,106 @@ static cl_int queue_x16m_kernel(struct __clState *clState, struct _dev_blk_ctx *
 
 
 	kernel = &clState->extra_kernels[16];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[17];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[18];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[19];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[20];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[21];
-	CL_SET_ARG_0(clState->padbuffer8);
-
-	kernel = &clState->extra_kernels[22];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 	
+	kernel = &clState->extra_kernels[22];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
 	kernel = &clState->extra_kernels[23];
-	CL_SET_ARG_0(clState->padbuffer8);
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[24];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[25];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[26];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[27];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[28];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[29];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[30];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
+
+	kernel = &clState->extra_kernels[31];
+	num = 0;
+	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
+	CL_SET_ARG(*next);
 
 	kernel = &clState->extra_kernels[hashOrder[0]];
 	num = 0;
 	CL_SET_ARG(clState->CLbuffer0);
 	CL_SET_ARG(clState->padbuffer8);
+	CL_SET_ARG(*cur);
 
 	kernel = &clState->kernel;
 	num = 0;
@@ -1086,115 +1183,107 @@ static cl_int queue_x16m_kernel(struct __clState *clState, struct _dev_blk_ctx *
 	return status;
 }
 
-static cl_int enqueue_x16m_kernels(struct __clState *clState,
+static cl_int enqueue_hex_kernels(struct __clState *clState,
 	size_t *p_global_work_offset, size_t *globalThreads, size_t *localThreads)
-{
+{//65536 thread
 	cl_int status;
-	uint8_t hashOrder[X16M_HASH_FUNC_COUNT];
+	uint8_t hashOrder[HEX_HASH_FUNC_COUNT];
+	cl_event *events = new cl_event[64];
+	hex_getalgolist(&clState->cldata[4], hashOrder);
+	//cl_uint* hashTable = new cl_uint[(*globalThreads + 2) * 16];
+	cl_uint algoHashes = 0;	
 
-	x16m_getalgolist(&clState->cldata[4], hashOrder);
 
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
+	clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
 		clState->extra_kernels[hashOrder[0]],
 		1, p_global_work_offset,
-		globalThreads, localThreads, 0, NULL, NULL);
+		globalThreads, localThreads, 0, NULL, &events[0]);
 	if (unlikely(status != CL_SUCCESS))
 	{
-		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) - 80 part", status);
 		return status;
 	}
+	cl_uint zero = 0;
+	if (!clState->buffer1)
+	{
+		applog(LOG_ERR, "-");
+	}
+	status=clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(cl_uint), 0, NULL, &events[1]);
+	if (unlikely(status != CL_SUCCESS))
+	{
+		applog(LOG_ERR, "Error %d: Fill buffer1 after 80part", status);
+		return status;
+	}
+	clWaitForEvents(2, events);
+	//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16+2, hashTable,0, NULL, &events[0]);
 
+	
+	 
+	cl_uint *curAlgoHashes=new cl_uint[1]; 
 	for (int i = 1; i < 16; i++)
 	{
-		// group 1
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[16],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// whirlpool64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[23],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// group 2
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[17],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// groestl64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[18],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// shavite64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[19],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// echo64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[20],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// hamsi64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[21],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-		// fugue64
-		status = clEnqueueNDRangeKernel(clState->commandQueue,
-			clState->extra_kernels[22],
-			1, p_global_work_offset,
-			globalThreads, localThreads, 0, NULL, NULL);
-		if (unlikely(status != CL_SUCCESS))
-		{
-			applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
-			return status;
-		}
-	}
 
+		int evc = 0;
+		cl_uint summ = 0;
+		for (int ki = 0; ki < 16; ki++)
+		{
+			int launchki = ki+16;
+
+			//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
+			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, sizeof(cl_uint)*(ki*(*globalThreads)+1), sizeof(cl_uint), curAlgoHashes, 0, NULL, NULL);
+			//status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, sizeof(cl_uint)*(ki*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, NULL);
+			//curAlgoHashes = &hashTable[ki*(*globalThreads) + 1];
+			algoHashes =( curAlgoHashes[0]/ (*localThreads))*(*localThreads);
+			algoHashes = curAlgoHashes[0];
+			summ += algoHashes;
+			if (algoHashes > *globalThreads)
+			{
+				applog(LOG_ERR, "Buffer problems algoHashes");
+				return -1;
+			}
+			if (summ > *globalThreads)
+			{
+				applog(LOG_ERR, "Buffer problems summ");
+				return -1;
+			}
+
+
+			if (algoHashes > 0) {
+				status = clEnqueueNDRangeKernel(clState->commandQueue,
+					clState->extra_kernels[launchki],
+					1, p_global_work_offset,
+					&algoHashes, localThreads, 0, NULL, &events[evc++]);
+				if (unlikely(status != CL_SUCCESS))
+				{
+					applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel). Round %d, part %d", status,i,ki);
+					return status;
+				}
+				
+				//status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
+			}
+
+		}
+	//	status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
+		clEnqueueCopyBuffer(clState->commandQueue, clState->buffer1, clState->MidstateBuf, 0, 0, ((*globalThreads) * 16 + 2) * sizeof(cl_uint), 0, NULL, &events[evc++]);
+		for(int fb=0;fb<16;fb++)
+			status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_FALSE, sizeof(cl_uint)*(fb*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, &events[evc++]);
+			//clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(cl_uint), 0, NULL, &events[evc++]);
+
+		clWaitForEvents(evc, events);
+
+		
+
+	}
+	events = NULL;
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
 		clState->kernel,
 		1, p_global_work_offset,
 		globalThreads, localThreads, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS))
 	{
-		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel)", status);
+		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) Last kernel", status);
 		return status;
 	}
 
@@ -1266,7 +1355,7 @@ static algorithm_settings_t algos[] = {
   { "x14", ALGO_X14, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 13, 8 * 16 * 4194304, 0, x14_regenhash, NULL, NULL, queue_x14_kernel, gen_hash, append_x13_compiler_options },
   { "x14old", ALGO_X14, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 10, 8 * 16 * 4194304, 0, x14_regenhash, NULL, NULL, queue_x14_old_kernel, gen_hash, append_x13_compiler_options },
 
-  { "x16m", ALGO_X16M, "", 1, 256, 256, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 24, 8 * 16 * 4194304, 0, x16m_regenhash, NULL, NULL, queue_x16m_kernel, sha256, append_x13_compiler_options, enqueue_x16m_kernels },
+  { "hex", ALGO_HEX, "", 1, 256, 256, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 32, 8 * 16 * 4194304, 0, hex_regenhash, NULL, NULL, queue_hex_kernel, sha256, append_x13_compiler_options, enqueue_hex_kernels },
 
   { "bitblock", ALGO_X15, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 14, 4 * 16 * 4194304, 0, bitblock_regenhash, NULL, NULL, queue_bitblock_kernel, gen_hash, append_x13_compiler_options },
   { "bitblockold", ALGO_X15, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 10, 4 * 16 * 4194304, 0, bitblock_regenhash, NULL, NULL, queue_bitblockold_kernel, gen_hash, append_x13_compiler_options },
@@ -1380,7 +1469,7 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfa
   ALGO_ALIAS("blakecoin", "blake256r8");
   ALGO_ALIAS("blake", "blake256r14");
   ALGO_ALIAS("gostd", "gostcoin-mod");	
-  ALGO_ALIAS("hex", "x16m");
+  ALGO_ALIAS("hex", "hex");
 
 #undef ALGO_ALIAS
 #undef ALGO_ALIAS_NF

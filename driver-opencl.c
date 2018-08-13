@@ -1508,6 +1508,8 @@ static void opencl_thread_shutdown(struct thr_info *thr)
     clReleaseMemObject(clState->CLbuffer0);
 	if (clState->buffer1)
 	clReleaseMemObject(clState->buffer1);
+	if (clState->MidstateBuf)
+		clReleaseMemObject(clState->MidstateBuf);
 	if (clState->buffer2)
 	clReleaseMemObject(clState->buffer2);
 	if (clState->buffer3)

@@ -562,11 +562,13 @@ __kernel void search2(__global ulong* block, __global hash_t* hashes)
 }
 
 // bmw64
-void bmw64(__global hash_t* hashes, bool update)
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search26(__global hash_t* hashes)
 {
  uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
-
+ bool update = (hash->h1[64] == X16M_BMW); 
+ if (!update) goto end;
   // bmw
   sph_u64 BMW_H[16];
 
@@ -831,10 +833,10 @@ void bmw64(__global hash_t* hashes, bool update)
   h8[6] = BMW_H[14];
   h8[7] = BMW_H[15];
 
-if (update)
 #pragma unroll 8
 	for (int i = 0; i < 8; i++) hash->h8[i] = h8[i];
 
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -941,13 +943,12 @@ __kernel void search3(__global ulong* block, __global hash_t* hashes)
 	barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// groestl64
+// groestl64 and whirlpool64
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search19(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
-  bool update = (hash->h1[64] == X16M_GROESTL);
 
 #if !SPH_SMALL_FOOTPRINT_GROESTL
   __local sph_u64 T0_C[256], T1_C[256], T2_C[256], T3_C[256];
@@ -955,6 +956,9 @@ __kernel void search19(__global hash_t* hashes)
 #else
   __local sph_u64 T0_C[256], T4_C[256];
 #endif
+
+  __local sph_u64 LT0[256], LT1[256], LT2[256], LT3[256], LT4[256], LT5[256], LT6[256], LT7[256];	
+
   int init = get_local_id(0);
   int step = get_local_size(0);
 
@@ -970,8 +974,21 @@ __kernel void search19(__global hash_t* hashes)
     T6_C[i] = T6[i];
     T7_C[i] = T7[i];
 #endif
+
+	LT0[i] = plain_T0[i];
+    LT1[i] = plain_T1[i];
+    LT2[i] = plain_T2[i];
+    LT3[i] = plain_T3[i];
+    LT4[i] = plain_T4[i];
+    LT5[i] = plain_T5[i];
+    LT6[i] = plain_T6[i];
+    LT7[i] = plain_T7[i];
+
   }
-  barrier(CLK_LOCAL_MEM_FENCE);    // groestl
+  barrier(CLK_LOCAL_MEM_FENCE);    // groestl and whirlpool
+  bool update = (hash->h1[64] == X16M_GROESTL); 	
+  if (!update) goto whirlpool;	
+
 #define T0 T0_C
 #define T1 T1_C
 #define T2 T2_C
@@ -1039,10 +1056,108 @@ __kernel void search19(__global hash_t* hashes)
 #undef T6
 #undef T7
 
-if (update)
 //#pragma unroll 8
   for (unsigned int u = 0; u < 8; u ++)
     hash->h8[u] = H[u + 8];
+
+whirlpool:
+	
+   // whirlpool
+	update = (hash->h1[64] == X16M_WHIRLPOOL); 	
+  if (!update) goto end;	
+
+  sph_u64 n0, n1, n2, n3, n4, n5, n6, n7;
+  sph_u64 h0, h1, h2, h3, h4, h5, h6, h7;
+  sph_u64 state[8];
+
+  n0 = (hash->h8[0]);
+  n1 = (hash->h8[1]);
+  n2 = (hash->h8[2]);
+  n3 = (hash->h8[3]);
+  n4 = (hash->h8[4]);
+  n5 = (hash->h8[5]);
+  n6 = (hash->h8[6]);
+  n7 = (hash->h8[7]);
+
+  h0 = h1 = h2 = h3 = h4 = h5 = h6 = h7 = 0;
+
+  n0 ^= h0;
+  n1 ^= h1;
+  n2 ^= h2;
+  n3 ^= h3;
+  n4 ^= h4;
+  n5 ^= h5;
+  n6 ^= h6;
+  n7 ^= h7;
+
+  #pragma unroll 10
+  for (unsigned r = 0; r < 10; r ++)
+  {
+    sph_u64 tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+
+    ROUND_KSCHED(plain_T, h, tmp, plain_RC[r]);
+    TRANSFER(h, tmp);
+    ROUND_WENC(plain_T, n, h, tmp);
+    TRANSFER(n, tmp);
+  }
+
+  state[0] = n0 ^ (hash->h8[0]);
+  state[1] = n1 ^ (hash->h8[1]);
+  state[2] = n2 ^ (hash->h8[2]);
+  state[3] = n3 ^ (hash->h8[3]);
+  state[4] = n4 ^ (hash->h8[4]);
+  state[5] = n5 ^ (hash->h8[5]);
+  state[6] = n6 ^ (hash->h8[6]);
+  state[7] = n7 ^ (hash->h8[7]);
+
+  n0 = 0x80;
+  n1 = n2 = n3 = n4 = n5 = n6 = 0;
+  n7 = 0x2000000000000;
+
+  h0 = state[0];
+  h1 = state[1];
+  h2 = state[2];
+  h3 = state[3];
+  h4 = state[4];
+  h5 = state[5];
+  h6 = state[6];
+  h7 = state[7];
+
+  n0 ^= h0;
+  n1 ^= h1;
+  n2 ^= h2;
+  n3 ^= h3;
+  n4 ^= h4;
+  n5 ^= h5;
+  n6 ^= h6;
+  n7 ^= h7;
+
+  #pragma unroll 10
+  for (unsigned r = 0; r < 10; r ++)
+  {
+    sph_u64 tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+
+    ROUND_KSCHED(LT, h, tmp, plain_RC[r]);
+    TRANSFER(h, tmp);
+    ROUND_WENC(plain_T, n, h, tmp);
+    TRANSFER(n, tmp);
+  }
+
+  state[0] ^= n0 ^ 0x80;
+  state[1] ^= n1;
+  state[2] ^= n2;
+  state[3] ^= n3;
+  state[4] ^= n4;
+  state[5] ^= n5;
+  state[6] ^= n6;
+  state[7] ^= n7 ^ 0x2000000000000;
+
+#pragma unroll 8
+  for (unsigned i = 0; i < 8; i ++)
+    hash->h8[i] = state[i];
+
+end:
+  barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
 // skein80
@@ -1437,10 +1552,13 @@ __kernel void search7(__global uint* block, __global hash_t* hashes)
 }
 
 // luffa64
-void luffa64(__global hash_t* hashes, bool update)
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search23(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
+  bool update = (hash->h1[64] == X16M_LUFFA);
+  if (!update) goto end;	
 
   // luffa
 
@@ -1484,7 +1602,7 @@ void luffa64(__global hash_t* hashes, bool update)
     }
     else if(i == 2)
       M0 = M1 = M2 = M3 = M4 = M5 = M6 = M7 = 0;
-    else if(i == 3 && update)
+    else if(i == 3)
     {
       hash->h4[0] = ENC32E(V00 ^ V10 ^ V20 ^ V30 ^ V40);
       hash->h4[1] = ENC32E(V01 ^ V11 ^ V21 ^ V31 ^ V41);
@@ -1496,8 +1614,7 @@ void luffa64(__global hash_t* hashes, bool update)
       hash->h4[7] = ENC32E(V07 ^ V17 ^ V27 ^ V37 ^ V47);
     }
   }
-if (update)
-{
+
   hash->h4[8] =  ENC32E(V00 ^ V10 ^ V20 ^ V30 ^ V40);
   hash->h4[9] =  ENC32E(V01 ^ V11 ^ V21 ^ V31 ^ V41);
   hash->h4[10] = ENC32E(V02 ^ V12 ^ V22 ^ V32 ^ V42);
@@ -1506,7 +1623,8 @@ if (update)
   hash->h4[13] = ENC32E(V05 ^ V15 ^ V25 ^ V35 ^ V45);
   hash->h4[14] = ENC32E(V06 ^ V16 ^ V26 ^ V36 ^ V46);
   hash->h4[15] = ENC32E(V07 ^ V17 ^ V27 ^ V37 ^ V47);
-}
+
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -1582,10 +1700,13 @@ __kernel void search8(__global uint* block, __global hash_t* hashes)
 }
 
 // cubehash64
-void cubehash64(__global hash_t* hashes, bool update)
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search18 (__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
+  bool update = (hash->h1[64] == X16M_CUBEHASH);	
+  if (!update) goto end;	
 
   // cubehash.h1
 
@@ -1627,8 +1748,7 @@ void cubehash64(__global hash_t* hashes, bool update)
     else if (i == 2)
       xv ^= SPH_C32(1);
   }
-if (update)
-{
+
   hash->h4[0] = x0;
   hash->h4[1] = x1;
   hash->h4[2] = x2;
@@ -1645,7 +1765,8 @@ if (update)
   hash->h4[13] = xd;
   hash->h4[14] = xe;
   hash->h4[15] = xf;
-}
+
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -1733,15 +1854,16 @@ __kernel void search9(__global uint* block, __global hash_t* hashes)
 	barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// shavite64
+// shavite64 and fugue64
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search20(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
-  bool update = (hash->h1[64] == X16M_SHAVITE);
 
   __local sph_u32 AES0[256], AES1[256], AES2[256], AES3[256];
+// mixtab (fugue64)
+  __local sph_u32 mixtab0[256], mixtab1[256], mixtab2[256], mixtab3[256];
 
   int init = get_local_id(0);
   int step = get_local_size(0);
@@ -1752,9 +1874,16 @@ __kernel void search20(__global hash_t* hashes)
     AES1[i] = AES1_C[i];
     AES2[i] = AES2_C[i];
     AES3[i] = AES3_C[i];
+
+	mixtab0[i] = mixtab0_c[i];
+    mixtab1[i] = mixtab1_c[i];
+    mixtab2[i] = mixtab2_c[i];
+    mixtab3[i] = mixtab3_c[i];
   }
 
   barrier(CLK_LOCAL_MEM_FENCE);
+  bool update = (hash->h1[64] == X16M_SHAVITE);
+  if (!update) goto fugue;		
 
   // shavite
   // IV
@@ -1794,8 +1923,7 @@ __kernel void search20(__global hash_t* hashes)
   rk1F = 0x2000000;
 
   c512(buf);
-if (update)
-{
+
   hash->h4[0] = h0;
   hash->h4[1] = h1;
   hash->h4[2] = h2;
@@ -1812,7 +1940,94 @@ if (update)
   hash->h4[13] = hD;
   hash->h4[14] = hE;
   hash->h4[15] = hF;
-}
+
+
+fugue:
+// fugue
+  update = (hash->h1[64] == X16M_FUGUE);
+  if (!update) goto end;	
+
+  sph_u32 S00, S01, S02, S03, S04, S05, S06, S07, S08, S09;
+  sph_u32 S10, S11, S12, S13, S14, S15, S16, S17, S18, S19;
+  sph_u32 S20, S21, S22, S23, S24, S25, S26, S27, S28, S29;
+  sph_u32 S30, S31, S32, S33, S34, S35;
+
+  ulong fc_bit_count = (sph_u64) 64 << 3;
+
+  S00 = S01 = S02 = S03 = S04 = S05 = S06 = S07 = S08 = S09 = S10 = S11 = S12 = S13 = S14 = S15 = S16 = S17 = S18 = S19 = 0;
+  S20 = SPH_C32(0x8807a57e); S21 = SPH_C32(0xe616af75); S22 = SPH_C32(0xc5d3e4db); S23 = SPH_C32(0xac9ab027);
+  S24 = SPH_C32(0xd915f117); S25 = SPH_C32(0xb6eecc54); S26 = SPH_C32(0x06e8020b); S27 = SPH_C32(0x4a92efd1);
+  S28 = SPH_C32(0xaac6e2c9); S29 = SPH_C32(0xddb21398); S30 = SPH_C32(0xcae65838); S31 = SPH_C32(0x437f203f);
+  S32 = SPH_C32(0x25ea78e7); S33 = SPH_C32(0x951fddd6); S34 = SPH_C32(0xda6ed11d); S35 = SPH_C32(0xe13e3567);
+
+  FUGUE512_3(DEC32E(hash->h4[0x0]), DEC32E(hash->h4[0x1]), DEC32E(hash->h4[0x2]));
+  FUGUE512_3(DEC32E(hash->h4[0x3]), DEC32E(hash->h4[0x4]), DEC32E(hash->h4[0x5]));
+  FUGUE512_3(DEC32E(hash->h4[0x6]), DEC32E(hash->h4[0x7]), DEC32E(hash->h4[0x8]));
+  FUGUE512_3(DEC32E(hash->h4[0x9]), DEC32E(hash->h4[0xA]), DEC32E(hash->h4[0xB]));
+  FUGUE512_3(DEC32E(hash->h4[0xC]), DEC32E(hash->h4[0xD]), DEC32E(hash->h4[0xE]));
+  FUGUE512_3(DEC32E(hash->h4[0xF]), as_uint2(fc_bit_count).y, as_uint2(fc_bit_count).x);
+
+  // apply round shift if necessary
+  int i;
+
+  for (i = 0; i < 32; i ++)
+  {
+    ROR3;
+    CMIX36(S00, S01, S02, S04, S05, S06, S18, S19, S20);
+    SMIX(S00, S01, S02, S03);
+  }
+
+  for (i = 0; i < 13; i ++)
+  {
+    S04 ^= S00;
+    S09 ^= S00;
+    S18 ^= S00;
+    S27 ^= S00;
+    ROR9;
+    SMIX(S00, S01, S02, S03);
+    S04 ^= S00;
+    S10 ^= S00;
+    S18 ^= S00;
+    S27 ^= S00;
+    ROR9;
+    SMIX(S00, S01, S02, S03);
+    S04 ^= S00;
+    S10 ^= S00;
+    S19 ^= S00;
+    S27 ^= S00;
+    ROR9;
+    SMIX(S00, S01, S02, S03);
+    S04 ^= S00;
+    S10 ^= S00;
+    S19 ^= S00;
+    S28 ^= S00;
+    ROR8;
+    SMIX(S00, S01, S02, S03);
+  }
+
+  S04 ^= S00;
+  S09 ^= S00;
+  S18 ^= S00;
+  S27 ^= S00;
+
+  hash->h4[0] = ENC32E(S01);
+  hash->h4[1] = ENC32E(S02);
+  hash->h4[2] = ENC32E(S03);
+  hash->h4[3] = ENC32E(S04);
+  hash->h4[4] = ENC32E(S09);
+  hash->h4[5] = ENC32E(S10);
+  hash->h4[6] = ENC32E(S11);
+  hash->h4[7] = ENC32E(S12);
+  hash->h4[8] = ENC32E(S18);
+  hash->h4[9] = ENC32E(S19);
+  hash->h4[10] = ENC32E(S20);
+  hash->h4[11] = ENC32E(S21);
+  hash->h4[12] = ENC32E(S27);
+  hash->h4[13] = ENC32E(S28);
+  hash->h4[14] = ENC32E(S29);
+  hash->h4[15] = ENC32E(S30);
+
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -1952,10 +2167,13 @@ __kernel void search10(__global uint* block, __global hash_t* hashes)
 }
 
 // simd64
-void simd64(__global hash_t* hashes, bool update)
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search25(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
+    bool update = (hash->h1[64] == X16M_SIMD);
+	if (!update) goto end;	
 
   // simd
   s32 q[256];
@@ -2060,8 +2278,6 @@ void simd64(__global hash_t* hashes, bool update)
 
   #undef q
 
-if (update)
-{
   hash->h4[0] = A0;
   hash->h4[1] = A1;
   hash->h4[2] = A2;
@@ -2078,7 +2294,8 @@ if (update)
   hash->h4[13] = B5;
   hash->h4[14] = B6;
   hash->h4[15] = B7;
-}
+
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -2162,7 +2379,7 @@ __kernel void search11(__global ulong* block, __global hash_t* hashes)
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// echo64
+// echo64 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search21(__global hash_t* hashes)
 {
@@ -2319,13 +2536,12 @@ __kernel void search12(__global ulong* block, __global hash_t* hashes)
 	barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// hamsi64
+// hamsi64 
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search22(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
-  __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);
-  bool update = (hash->h1[64] == X16M_HAMSI);	
+  __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);	
 
   #ifdef INPUT_BIG_LOCAL
   #define CALL_INPUT_BIG_LOCAL INPUT_BIG_LOCAL
@@ -2335,12 +2551,17 @@ __kernel void search22(__global hash_t* hashes)
     int init = get_local_id(0);
     int step = get_local_size(0);
     for (int i = init; i < 1024; i += step)
+	{
       T512_L[i] = T512_C[i];
+	}
 
     barrier(CLK_LOCAL_MEM_FENCE);
   #else
     #define CALL_INPUT_BIG_LOCAL INPUT_BIG
   #endif
+
+ bool update = (hash->h1[64] == X16M_HAMSI);
+ if (!update) goto end; 
 
   sph_u32 c0 = HAMSI_IV512[0], c1 = HAMSI_IV512[1], c2 = HAMSI_IV512[2], c3 = HAMSI_IV512[3];
   sph_u32 c4 = HAMSI_IV512[4], c5 = HAMSI_IV512[5], c6 = HAMSI_IV512[6], c7 = HAMSI_IV512[7];
@@ -2375,11 +2596,11 @@ __kernel void search22(__global hash_t* hashes)
 
   #undef buf
   #undef CALL_INPUT_BIG_LOCAL
-if (update)
+
   for (unsigned u = 0; u < 16; u ++)
       hash->h4[u] = ENC32E(h[u]);
 
-
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -2491,115 +2712,6 @@ __kernel void search13(__global uint* block, __global hash_t* hashes)
 	barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// fugue64
-__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search23(__global hash_t* hashes)
-{
-  uint gid = get_global_id(0);
-  uint offset = get_global_offset(0);
-  __global hash_t *hash = &(hashes[gid-offset]);
-  bool update = (hash->h1[64] == X16M_FUGUE);
-
-  // mixtab
-  __local sph_u32 mixtab0[256], mixtab1[256], mixtab2[256], mixtab3[256];
-  int init = get_local_id(0);
-  int step = get_local_size(0);
-  for (int i = init; i < 256; i += step)
-  {
-    mixtab0[i] = mixtab0_c[i];
-    mixtab1[i] = mixtab1_c[i];
-    mixtab2[i] = mixtab2_c[i];
-    mixtab3[i] = mixtab3_c[i];
-  }
-
-  barrier(CLK_LOCAL_MEM_FENCE);
-
-  // fugue
-  sph_u32 S00, S01, S02, S03, S04, S05, S06, S07, S08, S09;
-  sph_u32 S10, S11, S12, S13, S14, S15, S16, S17, S18, S19;
-  sph_u32 S20, S21, S22, S23, S24, S25, S26, S27, S28, S29;
-  sph_u32 S30, S31, S32, S33, S34, S35;
-
-  ulong fc_bit_count = (sph_u64) 64 << 3;
-
-  S00 = S01 = S02 = S03 = S04 = S05 = S06 = S07 = S08 = S09 = S10 = S11 = S12 = S13 = S14 = S15 = S16 = S17 = S18 = S19 = 0;
-  S20 = SPH_C32(0x8807a57e); S21 = SPH_C32(0xe616af75); S22 = SPH_C32(0xc5d3e4db); S23 = SPH_C32(0xac9ab027);
-  S24 = SPH_C32(0xd915f117); S25 = SPH_C32(0xb6eecc54); S26 = SPH_C32(0x06e8020b); S27 = SPH_C32(0x4a92efd1);
-  S28 = SPH_C32(0xaac6e2c9); S29 = SPH_C32(0xddb21398); S30 = SPH_C32(0xcae65838); S31 = SPH_C32(0x437f203f);
-  S32 = SPH_C32(0x25ea78e7); S33 = SPH_C32(0x951fddd6); S34 = SPH_C32(0xda6ed11d); S35 = SPH_C32(0xe13e3567);
-
-  FUGUE512_3(DEC32E(hash->h4[0x0]), DEC32E(hash->h4[0x1]), DEC32E(hash->h4[0x2]));
-  FUGUE512_3(DEC32E(hash->h4[0x3]), DEC32E(hash->h4[0x4]), DEC32E(hash->h4[0x5]));
-  FUGUE512_3(DEC32E(hash->h4[0x6]), DEC32E(hash->h4[0x7]), DEC32E(hash->h4[0x8]));
-  FUGUE512_3(DEC32E(hash->h4[0x9]), DEC32E(hash->h4[0xA]), DEC32E(hash->h4[0xB]));
-  FUGUE512_3(DEC32E(hash->h4[0xC]), DEC32E(hash->h4[0xD]), DEC32E(hash->h4[0xE]));
-  FUGUE512_3(DEC32E(hash->h4[0xF]), as_uint2(fc_bit_count).y, as_uint2(fc_bit_count).x);
-
-  // apply round shift if necessary
-  int i;
-
-  for (i = 0; i < 32; i ++)
-  {
-    ROR3;
-    CMIX36(S00, S01, S02, S04, S05, S06, S18, S19, S20);
-    SMIX(S00, S01, S02, S03);
-  }
-
-  for (i = 0; i < 13; i ++)
-  {
-    S04 ^= S00;
-    S09 ^= S00;
-    S18 ^= S00;
-    S27 ^= S00;
-    ROR9;
-    SMIX(S00, S01, S02, S03);
-    S04 ^= S00;
-    S10 ^= S00;
-    S18 ^= S00;
-    S27 ^= S00;
-    ROR9;
-    SMIX(S00, S01, S02, S03);
-    S04 ^= S00;
-    S10 ^= S00;
-    S19 ^= S00;
-    S27 ^= S00;
-    ROR9;
-    SMIX(S00, S01, S02, S03);
-    S04 ^= S00;
-    S10 ^= S00;
-    S19 ^= S00;
-    S28 ^= S00;
-    ROR8;
-    SMIX(S00, S01, S02, S03);
-  }
-
-  S04 ^= S00;
-  S09 ^= S00;
-  S18 ^= S00;
-  S27 ^= S00;
-if (update)
-{
-  hash->h4[0] = ENC32E(S01);
-  hash->h4[1] = ENC32E(S02);
-  hash->h4[2] = ENC32E(S03);
-  hash->h4[3] = ENC32E(S04);
-  hash->h4[4] = ENC32E(S09);
-  hash->h4[5] = ENC32E(S10);
-  hash->h4[6] = ENC32E(S11);
-  hash->h4[7] = ENC32E(S12);
-  hash->h4[8] = ENC32E(S18);
-  hash->h4[9] = ENC32E(S19);
-  hash->h4[10] = ENC32E(S20);
-  hash->h4[11] = ENC32E(S21);
-  hash->h4[12] = ENC32E(S27);
-  hash->h4[13] = ENC32E(S28);
-  hash->h4[14] = ENC32E(S29);
-  hash->h4[15] = ENC32E(S30);
-}
-
-  barrier(CLK_GLOBAL_MEM_FENCE);
-}
-
 // shabal80
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
 __kernel void search14(__global uint* block, __global hash_t* hashes)
@@ -2679,11 +2791,14 @@ __kernel void search14(__global uint* block, __global hash_t* hashes)
 }
 
 // shabal64
-void shabal64(__global hash_t* hashes, bool update)
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search24(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   uint offset = get_global_offset(0);
   __global hash_t *hash = &(hashes[gid-offset]);
+  bool update = (hash->h1[64] == X16M_SHABAL);	
+  if (!update) goto end;
 
   // shabal
   sph_u32 A00 = A_init_512[0], A01 = A_init_512[1], A02 = A_init_512[2], A03 = A_init_512[3], A04 = A_init_512[4], A05 = A_init_512[5], A06 = A_init_512[6], A07 = A_init_512[7],
@@ -2733,8 +2848,6 @@ void shabal64(__global hash_t* hashes, bool update)
     APPLY_P;
   }
 
-if (update)
-{
 	hash->h4[0] = B0;
 	hash->h4[1] = B1;
 	hash->h4[2] = B2;
@@ -2751,7 +2864,8 @@ if (update)
 	hash->h4[13] = BD;
 	hash->h4[14] = BE;
 	hash->h4[15] = BF;
-}
+
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -2869,128 +2983,6 @@ __kernel void search15(__global ulong* block, __global hash_t* hashes)
     barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// whirlpool64
-__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void  search24(__global hash_t* hashes)
-{
-  uint gid = get_global_id(0);
-  uint offset = get_global_offset(0);
-  __global hash_t *hash = &(hashes[gid-offset]);
-  bool update = (hash->h1[64] == X16M_WHIRLPOOL);
-
-  __local sph_u64 LT0[256], LT1[256], LT2[256], LT3[256], LT4[256], LT5[256], LT6[256], LT7[256];
-
-  int init = get_local_id(0);
-  int step = get_local_size(0);
-
-  for (int i = init; i < 256; i += step)
-  {
-    LT0[i] = plain_T0[i];
-    LT1[i] = plain_T1[i];
-    LT2[i] = plain_T2[i];
-    LT3[i] = plain_T3[i];
-    LT4[i] = plain_T4[i];
-    LT5[i] = plain_T5[i];
-    LT6[i] = plain_T6[i];
-    LT7[i] = plain_T7[i];
-  }
-
-  barrier(CLK_LOCAL_MEM_FENCE);
-
-  // whirlpool
-  sph_u64 n0, n1, n2, n3, n4, n5, n6, n7;
-  sph_u64 h0, h1, h2, h3, h4, h5, h6, h7;
-  sph_u64 state[8];
-
-  n0 = (hash->h8[0]);
-  n1 = (hash->h8[1]);
-  n2 = (hash->h8[2]);
-  n3 = (hash->h8[3]);
-  n4 = (hash->h8[4]);
-  n5 = (hash->h8[5]);
-  n6 = (hash->h8[6]);
-  n7 = (hash->h8[7]);
-
-  h0 = h1 = h2 = h3 = h4 = h5 = h6 = h7 = 0;
-
-  n0 ^= h0;
-  n1 ^= h1;
-  n2 ^= h2;
-  n3 ^= h3;
-  n4 ^= h4;
-  n5 ^= h5;
-  n6 ^= h6;
-  n7 ^= h7;
-
-  #pragma unroll 10
-  for (unsigned r = 0; r < 10; r ++)
-  {
-    sph_u64 tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
-
-    ROUND_KSCHED(plain_T, h, tmp, plain_RC[r]);
-    TRANSFER(h, tmp);
-    ROUND_WENC(plain_T, n, h, tmp);
-    TRANSFER(n, tmp);
-  }
-
-  state[0] = n0 ^ (hash->h8[0]);
-  state[1] = n1 ^ (hash->h8[1]);
-  state[2] = n2 ^ (hash->h8[2]);
-  state[3] = n3 ^ (hash->h8[3]);
-  state[4] = n4 ^ (hash->h8[4]);
-  state[5] = n5 ^ (hash->h8[5]);
-  state[6] = n6 ^ (hash->h8[6]);
-  state[7] = n7 ^ (hash->h8[7]);
-
-  n0 = 0x80;
-  n1 = n2 = n3 = n4 = n5 = n6 = 0;
-  n7 = 0x2000000000000;
-
-  h0 = state[0];
-  h1 = state[1];
-  h2 = state[2];
-  h3 = state[3];
-  h4 = state[4];
-  h5 = state[5];
-  h6 = state[6];
-  h7 = state[7];
-
-  n0 ^= h0;
-  n1 ^= h1;
-  n2 ^= h2;
-  n3 ^= h3;
-  n4 ^= h4;
-  n5 ^= h5;
-  n6 ^= h6;
-  n7 ^= h7;
-
-  #pragma unroll 10
-  for (unsigned r = 0; r < 10; r ++)
-  {
-    sph_u64 tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
-
-    ROUND_KSCHED(LT, h, tmp, plain_RC[r]);
-    TRANSFER(h, tmp);
-    ROUND_WENC(plain_T, n, h, tmp);
-    TRANSFER(n, tmp);
-  }
-
-  state[0] ^= n0 ^ 0x80;
-  state[1] ^= n1;
-  state[2] ^= n2;
-  state[3] ^= n3;
-  state[4] ^= n4;
-  state[5] ^= n5;
-  state[6] ^= n6;
-  state[7] ^= n7 ^ 0x2000000000000;
-if (update)
-{
-#pragma unroll 8
-  for (unsigned i = 0; i < 8; i ++)
-    hash->h8[i] = state[i];
-}
-  barrier(CLK_GLOBAL_MEM_FENCE);
-}
 
 // sha512_80
 __attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
@@ -3030,12 +3022,15 @@ __kernel void search16(__global unsigned char* block, __global hash_t* hashes)
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
-// sha512_64)))
-void sha51264(__global hash_t* hashes, bool update)
+// sha512_64
+__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
+__kernel void search27(__global hash_t* hashes)
 {
   uint gid = get_global_id(0);
   uint offset = get_global_offset(0);
   __global hash_t *hash = &(hashes[gid-offset]);
+bool update = (hash->h1[64] == X16M_SHA512);
+	if (!update) goto end;	
 
   sph_u64 W[16];
   sph_u64 SHA512Out[8];
@@ -3058,11 +3053,11 @@ void sha51264(__global hash_t* hashes, bool update)
 
   SHA512Block(W, SHA512Out);
 
-if (update)
 #pragma unroll
   for (int i = 0; i < 8; i++)
     hash->h8[i] = ENC64E(SHA512Out[i]);
 
+end:
   barrier(CLK_GLOBAL_MEM_FENCE);
 }
 
@@ -3088,31 +3083,10 @@ __kernel void search17(__global hash_t* hashes)
     __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);	
     hash->h1[64] = hash->h1[0] % X16M_HASH_FUNC_COUNT;
 	blake64(hashes, hash->h1[64] == X16M_BLAKE);
-	bmw64(hashes, hash->h1[64] == X16M_BMW);
- 	//groestl64(hashes, hash->h1[64] == X16M_GROESTL);
 	jh64(hashes, hash->h1[64] == X16M_JH);
 	keccak64 (hashes, hash->h1[64] == X16M_KECCAK);
 	skein64 (hashes, hash->h1[64] == X16M_SKEIN);
-	luffa64 (hashes, hash->h1[64] == X16M_LUFFA);
-
-	//whirlpool64(hashes, hash->h1[64] == X16M_WHIRLPOOL);
-	sha51264 (hashes, hash->h1[64] == X16M_SHA512); 
+//	sha51264 (hashes, hash->h1[64] == X16M_SHA512); 
 }
 
-__attribute__((reqd_work_group_size(WORKSIZE, 1, 1)))
-__kernel void search18(__global hash_t* hashes)
-{
-        uint gid = get_global_id(0);
-    __global hash_t *hash = &(hashes[gid-get_global_offset(0)]);        
-
-	cubehash64 (hashes, hash->h1[64] == X16M_CUBEHASH);
-	//shavite64 (hashes, hash->h1[64] == X16M_SHAVITE);
-	simd64 (hashes, hash->h1[64] == X16M_SIMD);
-//	echo64 (hashes, hash->h1[64] == X16M_ECHO);
-//	hamsi64 (hashes, hash->h1[64] == X16M_HAMSI);
-
-	//fugue64 (hashes, hash->h1[64] == X16M_FUGUE);   
-        shabal64 (hashes, hash->h1[64] == X16M_SHABAL);
-
-}
 #endif // X16M_CL

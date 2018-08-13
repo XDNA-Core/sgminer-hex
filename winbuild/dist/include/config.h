@@ -71,16 +71,17 @@
 
 #endif
 
-#define VERSION "5.6.2-gostcoin"
+#define VERSION "5.6.2-hex"
 #define PACKAGE_NAME "sgminer"
 #define PACKAGE_TARNAME "sgminer"
-#define PACKAGE_VERSION "5.6.2-gostcoin"
-#define PACKAGE_STRING "sgminer 5.6.2-gostcoin"
+#define PACKAGE_VERSION "5.6.2-hex"
+#define PACKAGE_STRING "sgminer 5.6.2-hex"
 #define PACKAGE "sgminer"
 
 #define SGMINER_PREFIX ""
 
 //#include "gitversion.h"
+
 #include "winbuild.h"
 
 #endif

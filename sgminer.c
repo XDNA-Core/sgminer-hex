@@ -6157,7 +6157,11 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
 		memcpy(merkle_sha + 32, merkle_sha, 32); 	
 	  else		
       	memcpy(merkle_sha + 32, pool->swork.merkle_bin[i], 32);
-      pool->algorithm.gen_hash(merkle_sha, 64, merkle_root);
+	  if(pool->algorithm.type==ALGO_HEX)
+		 gen_hash(merkle_sha, 64, merkle_root);//sha256d
+	  else
+		  pool->algorithm.gen_hash(merkle_sha, 64, merkle_root);
+
       memcpy(merkle_sha, merkle_root, 32);
     }
   }
