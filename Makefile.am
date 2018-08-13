@@ -82,8 +82,7 @@ sgminer_SOURCES += algorithm/blake256.c algorithm/blake256.h
 sgminer_SOURCES += algorithm/blakecoin.c algorithm/blakecoin.h
 sgminer_SOURCES += algorithm/decred.c algorithm/decred.h
 sgminer_SOURCES += algorithm/pascal.c algorithm/pascal.h
-sgminer_SOURCES += algorithm/x16m.c algorithm/x16m.h
+sgminer_SOURCES += algorithm/hex.c algorithm/hex.h
 sgminer_SOURCES += algorithm/gostcoin.c algorithm/gostcoin.h
 
 bin_SCRIPTS	= $(top_srcdir)/kernel/*.cl
-

@@ -61,7 +61,7 @@ const char *algorithm_type_str[] = {
   "X13",
   "X14",
   "X15",
-  "X16m",
+  "HEX",
   "Keccak",
   "Quarkcoin",
   "Twecoin",
@@ -1221,7 +1221,7 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 
 
 
-	cl_uint *curAlgoHashes=(cl_uint*)alloca(sizeof(cl_uint)); 
+	cl_uint *curAlgoHashes=(cl_uint*)alloca(sizeof(cl_uint));
 	for (int i = 1; i < 16; i++)
 	{
 
