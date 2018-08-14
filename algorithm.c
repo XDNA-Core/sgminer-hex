@@ -81,7 +81,7 @@ const char *algorithm_type_str[] = {
   "Vanilla",
   "Sibcoin",
   "Gostcoin",
-  "Gostd"
+  "Gostd"	
 };
 
 void sha256(const unsigned char *message, unsigned int len, unsigned char *digest)
@@ -388,7 +388,7 @@ static cl_int queue_sibcoin_mod_kernel(struct __clState *clState, struct _dev_bl
   // keccak - search5
   CL_NEXTKERNEL_SET_ARG_0(clState->padbuffer8);
   // gost - search6
-  CL_NEXTKERNEL_SET_ARG_0(clState->padbuffer8);
+  CL_NEXTKERNEL_SET_ARG_0(clState->padbuffer8);  
   // luffa - search7
   CL_NEXTKERNEL_SET_ARG_0(clState->padbuffer8);
   // cubehash - search8
@@ -1041,11 +1041,11 @@ static cl_int queue_hex_kernel(struct __clState *clState, struct _dev_blk_ctx *b
 	if (clState->MidstateBuf)
 	{
 		clReleaseMemObject(clState->MidstateBuf);
-
+		
 	}
 	if (clState->buffer1) {
 		clReleaseMemObject(clState->buffer1);
-
+		
 	}
 
 	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads+2)*sizeof(cl_uint)*16, NULL, &status); // we don't need that much just tired...
@@ -1112,7 +1112,7 @@ static cl_int queue_hex_kernel(struct __clState *clState, struct _dev_blk_ctx *b
 	CL_SET_ARG(clState->padbuffer8);
 	CL_SET_ARG(*cur);
 	CL_SET_ARG(*next);
-
+	
 	kernel = &clState->extra_kernels[22];
 	num = 0;
 	CL_SET_ARG(clState->padbuffer8);
@@ -1196,8 +1196,8 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	cl_event *events =(cl_event*) malloc(sizeof(cl_event)*64);
 	hex_getalgolist(&clState->cldata[4], hashOrder);
 	//cl_uint* hashTable = new cl_uint[(*globalThreads + 2) * 16];
-	cl_uint *algoHashes = (cl_uint*)malloc(sizeof(cl_event));
-
+	uint32_t *algoHashes = (uint32_t*)malloc(sizeof(uint32_t));
+	*algoHashes = 0;
 
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
 	clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
@@ -1215,7 +1215,7 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	{
 		applog(LOG_ERR, "-");
 	}
-	status=clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(cl_uint), 0, NULL, &events[1]);
+	status=clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, &events[1]);
 	if (unlikely(status != CL_SUCCESS))
 	{
 		applog(LOG_ERR, "Error %d: Fill buffer1 after 80part", status);
@@ -1224,7 +1224,7 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	clWaitForEvents(2, events);
 	//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16+2, hashTable,0, NULL, &events[0]);
 
-
+	
 	size_t globalt = (*globalThreads);
 	size_t localt = (*localThreads);
 	cl_event* readev= (cl_event*)malloc(sizeof(cl_event) * 1);
@@ -1232,14 +1232,14 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	{
 
 		int evc = 0;
-		cl_uint summ = 0;
+		uint32_t summ = 0;
 		for (int ki = 0; ki < 16; ki++)
 		{
 			int launchki = ki+16;
 
 			//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
-			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, sizeof(cl_uint)*(ki*globalt+1), sizeof(cl_uint), algoHashes, 0, NULL, NULL);
-
+			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, sizeof(uint32_t)*(ki*globalt+1), sizeof(uint32_t), algoHashes, 0, NULL, NULL);
+			
 			//status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, sizeof(cl_uint)*(ki*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, NULL);
 			//curAlgoHashes = &hashTable[ki*(*globalThreads) + 1];
 			//algoHashes =(algoHashes/localt)*localt;
@@ -1267,26 +1267,26 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 					applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel). Round %d, part %d", status,i,ki);
 					return status;
 				}
-
+				
 				//status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
 			}
 
 		}
 		clFinish(clState->commandQueue);
 	//	status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
-		clEnqueueCopyBuffer(clState->commandQueue, clState->buffer1, clState->MidstateBuf, 0, 0, ((*globalThreads) * 16 + 2) * sizeof(cl_uint), 0, NULL, NULL);
+		clEnqueueCopyBuffer(clState->commandQueue, clState->buffer1, clState->MidstateBuf, 0, 0, ((*globalThreads) * 16 + 2) * sizeof(uint32_t), 0, NULL, NULL);
 		//for(int fb=0;fb<16;fb++)
 			//status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, false, sizeof(cl_uint)*(fb*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, &events[evc++]);
-		clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(cl_uint), 0, NULL, NULL);
+		clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
 		clFinish(clState->commandQueue);
 
-
-
+		
+		
 
 	}
-
-  free(events);
-  free(readev);
+	
+	free(events);
+	free(readev);
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
 		clState->kernel,
 		1, p_global_work_offset,
@@ -1346,7 +1346,7 @@ static algorithm_settings_t algos[] = {
 #define A_DARK(a, b) \
   { a, ALGO_X11, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 0, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, b, NULL, NULL, queue_sph_kernel, gen_hash, append_x11_compiler_options }
   A_DARK("darkcoin", darkcoin_regenhash),
-  A_DARK("sibcoin", sibcoin_regenhash),
+  A_DARK("sibcoin", sibcoin_regenhash),  
   A_DARK("inkcoin", inkcoin_regenhash),
   A_DARK("myriadcoin-groestl", myriadcoin_groestl_regenhash),
 #undef A_DARK
@@ -1357,7 +1357,7 @@ static algorithm_settings_t algos[] = {
   { "darkcoin-mod", ALGO_X11, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 10, 8 * 16 * 4194304, 0, darkcoin_regenhash, NULL, NULL, queue_darkcoin_mod_kernel, gen_hash, append_x11_compiler_options },
 
   { "sibcoin-mod", ALGO_X11, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 11, 2 * 16 * 4194304, 0, sibcoin_regenhash, NULL, NULL, queue_sibcoin_mod_kernel, gen_hash, append_x11_compiler_options },
-
+  
   { "marucoin", ALGO_X13, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 0, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, marucoin_regenhash, NULL, NULL, queue_sph_kernel, gen_hash, append_x13_compiler_options },
   { "marucoin-mod", ALGO_X13, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 12, 8 * 16 * 4194304, 0, marucoin_regenhash, NULL, NULL, queue_marucoin_mod_kernel, gen_hash, append_x13_compiler_options },
   { "marucoin-modold", ALGO_X13, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 10, 8 * 16 * 4194304, 0, marucoin_regenhash, NULL, NULL, queue_marucoin_mod_old_kernel, gen_hash, append_x13_compiler_options },
@@ -1396,8 +1396,8 @@ static algorithm_settings_t algos[] = {
   { "pascal", ALGO_PASCAL, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 0, CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, pascal_regenhash, pascal_midstate, NULL, queue_pascal_kernel, NULL, NULL },
 
 
- { "gostcoin-mod", ALGO_GOSTCOIN, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 4 * 8 * 4194304, 0, gostcoin_regenhash, NULL, NULL, queue_gostcoin_mod_kernel, gostcoin_gen_hash, NULL },
- { "gostd", ALGO_GOSTD, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 4 * 8 * 4194304, 0, gostcoin_regenhash, NULL, NULL, queue_gostcoin_mod_kernel, gen_hash, NULL },
+ { "gostcoin-mod", ALGO_GOSTCOIN, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 4 * 8 * 4194304, 0, gostcoin_regenhash, NULL, NULL, queue_gostcoin_mod_kernel, gostcoin_gen_hash, NULL },	
+ { "gostd", ALGO_GOSTD, "", 1, 1, 1, 0, 0, 0xFF, 0xFFFFULL, 0x0000ffffUL, 0, 4 * 8 * 4194304, 0, gostcoin_regenhash, NULL, NULL, queue_gostcoin_mod_kernel, gen_hash, NULL },	 
 
   // Terminator (do not remove)
   { NULL, ALGO_UNK, "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL }
@@ -1478,7 +1478,7 @@ static const char *lookup_algorithm_alias(const char *lookup_alias, uint8_t *nfa
   ALGO_ALIAS("lyra2v2", "lyra2rev2");
   ALGO_ALIAS("blakecoin", "blake256r8");
   ALGO_ALIAS("blake", "blake256r14");
-  ALGO_ALIAS("gostd", "gostcoin-mod");
+  ALGO_ALIAS("gostd", "gostcoin-mod");	
   ALGO_ALIAS("hex", "hex");
 
 #undef ALGO_ALIAS
