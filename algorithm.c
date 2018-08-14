@@ -1210,7 +1210,7 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) - 80 part", status);
 		return status;
 	}
-	cl_uint zero = 0;
+	uint32_t zero = 0;
 	if (!clState->buffer1)
 	{
 		applog(LOG_ERR, "-");
