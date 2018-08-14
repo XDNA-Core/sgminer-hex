@@ -86,3 +86,4 @@ sgminer_SOURCES += algorithm/hex.c algorithm/hex.h
 sgminer_SOURCES += algorithm/gostcoin.c algorithm/gostcoin.h
 
 bin_SCRIPTS	= $(top_srcdir)/kernel/*.cl
+
