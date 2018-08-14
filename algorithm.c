@@ -1048,12 +1048,12 @@ static cl_int queue_hex_kernel(struct __clState *clState, struct _dev_blk_ctx *b
 		
 	}
 
-	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads+2)*sizeof(cl_uint)*16, NULL, &status); // we don't need that much just tired...
+	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads+2)*sizeof(uint32_t)*16, NULL, &status); // we don't need that much just tired...
 	if (status != CL_SUCCESS && !clState->MidstateBuf) {
 		applog(LOG_DEBUG, "Error %d: clCreateBuffer (MidstateBuf), decrease TC or increase LG", status);
 		return NULL;
 	}
-	clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads + 2) * sizeof(cl_uint) * 16, NULL, &status); // we don't need that much just tired...
+	clState->buffer1 = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads + 2) * sizeof(uint32_t) * 16, NULL, &status); // we don't need that much just tired...
 	if (status != CL_SUCCESS && !clState->buffer1) {
 		applog(LOG_DEBUG, "Error %d: clCreateBuffer (buffer1), decrease TC or increase LG", status);
 		return NULL;
@@ -1199,7 +1199,14 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	uint32_t *algoHashes = (uint32_t*)malloc(sizeof(uint32_t));
 	*algoHashes = 0;
 
+	uint32_t zero = 0;
+	clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
+	if (unlikely(status != CL_SUCCESS))
+	{
+		applog(LOG_ERR, "Error %d: Writing globalThreads (clEnqueueWriteBuffer)", status);
+		return status;
+	}
 	clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
 		clState->extra_kernels[hashOrder[0]],
@@ -1210,7 +1217,7 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) - 80 part", status);
 		return status;
 	}
-	uint32_t zero = 0;
+	
 	if (!clState->buffer1)
 	{
 		applog(LOG_ERR, "-");
