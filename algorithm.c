@@ -1193,14 +1193,14 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 {//65536 thread
 	cl_int status;
 	uint8_t hashOrder[HEX_HASH_FUNC_COUNT];
-	cl_event *events =(cl_event*) malloc(sizeof(cl_event)*64);
+	cl_event *events = (cl_event*)malloc(sizeof(cl_event) * 64);
 	hex_getalgolist(&clState->cldata[4], hashOrder);
 	//cl_uint* hashTable = new cl_uint[(*globalThreads + 2) * 16];
 	uint32_t *algoHashes = (uint32_t*)malloc(sizeof(uint32_t));
 	*algoHashes = 0;
 
 	uint32_t zero = 0;
-	clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
+	clEnqueueFillBuffer(clState->commandQueue, clState->MidstateBuf, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
 	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS))
 	{
@@ -1217,12 +1217,12 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) - 80 part", status);
 		return status;
 	}
-	
+
 	if (!clState->buffer1)
 	{
 		applog(LOG_ERR, "-");
 	}
-	status=clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, &events[1]);
+	status = clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, &events[1]);
 	if (unlikely(status != CL_SUCCESS))
 	{
 		applog(LOG_ERR, "Error %d: Fill buffer1 after 80part", status);
@@ -1231,10 +1231,11 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	clWaitForEvents(2, events);
 	//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16+2, hashTable,0, NULL, &events[0]);
 
-	
+
 	size_t globalt = (*globalThreads);
 	size_t localt = (*localThreads);
-	cl_event* readev= (cl_event*)malloc(sizeof(cl_event) * 1);
+	size_t callCount = 0;
+	cl_event* readev = (cl_event*)malloc(sizeof(cl_event) * 1);
 	for (int i = 1; i < 16; i++)
 	{
 
@@ -1242,56 +1243,50 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 		uint32_t summ = 0;
 		for (int ki = 0; ki < 16; ki++)
 		{
-			int launchki = ki+16;
+			int launchki = ki + 16;
 
-			//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
-			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, sizeof(uint32_t)*(ki*globalt+1), sizeof(uint32_t), algoHashes, 0, NULL, NULL);
-			
-			//status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, sizeof(cl_uint)*(ki*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, NULL);
-			//curAlgoHashes = &hashTable[ki*(*globalThreads) + 1];
-			//algoHashes =(algoHashes/localt)*localt;
-			//algoHashes = curAlgoHashes[0];
+
+			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, sizeof(uint32_t)*(ki*globalt + 1), sizeof(uint32_t), algoHashes, 0, NULL, NULL);
 			summ += *algoHashes;
 			if (*algoHashes > globalt)
 			{
-				applog(LOG_ERR, "Buffer problems algoHashes. Ri=%d, algoCount=%d, globalThreads=%d",ki,*algoHashes, globalt);
+				applog(LOG_ERR, "Buffer problems algoHashes. Ri=%d, algoCount=%d, globalThreads=%d", ki, *algoHashes, globalt);
 				return -1;
 			}
 			if (summ > globalt)
 			{
-				applog(LOG_ERR, "Buffer problems summ. Ri=%d, algoCount=%d, globalThreads=%d", ki,*algoHashes, globalt);
+				applog(LOG_ERR, "Buffer problems summ. Ri=%d, algoCount=%d, globalThreads=%d", ki, *algoHashes, globalt);
 				return -1;
 			}
+			callCount = algoHashes[0];
 
 
-			if (algoHashes > 0) {
+			if (algoHashes[0] > 0) {
 				status = clEnqueueNDRangeKernel(clState->commandQueue,
 					clState->extra_kernels[launchki],
 					1, p_global_work_offset,
-					algoHashes, localThreads, 0, NULL, NULL);// &events[evc++]);
+					&callCount, localThreads, 0, NULL, NULL);// &events[evc++]);
 				if (unlikely(status != CL_SUCCESS))
 				{
-					applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel). Round %d, part %d", status,i,ki);
+					applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel). Round %d, part %d, gthreads %d, lsize %d", status, i, ki, *algoHashes, localt);
 					return status;
 				}
-				
-				//status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
+
+
 			}
 
 		}
 		clFinish(clState->commandQueue);
-	//	status = clEnqueueReadBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16 + 2, hashTable, 0, NULL, &events[0]);
 		clEnqueueCopyBuffer(clState->commandQueue, clState->buffer1, clState->MidstateBuf, 0, 0, ((*globalThreads) * 16 + 2) * sizeof(uint32_t), 0, NULL, NULL);
-		//for(int fb=0;fb<16;fb++)
-			//status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, false, sizeof(cl_uint)*(fb*(*globalThreads) + 1), sizeof(cl_uint), &zero, 0, NULL, &events[evc++]);
-		clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
+		for(int fb=0;fb<16;fb++)
+		 status = clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, false, sizeof(uint32_t)*(fb*(*globalThreads) + 1), sizeof(uint32_t), &zero, 0, NULL, NULL);
 		clFinish(clState->commandQueue);
 
-		
-		
+
+
 
 	}
-	
+
 	free(events);
 	free(readev);
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
