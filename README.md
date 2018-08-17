@@ -51,7 +51,7 @@ Mandatory:
 * [curl dev library](http://curl.haxx.se/libcurl/) - `libcurl4-openssl-dev` on Debian
 * [pkg-config](http://www.freedesktop.org/wiki/Software/pkg-config)
 * [libtool](http://www.gnu.org/software/libtool/)
-* [AMD APP SDK](http://developer.amd.com/tools-and-sdks/heterogeneous-computing/amd-accelerated-parallel-processing-app-sdk/downloads/)	- available under various names as a package on different GNU/Linux distributions
+* [AMD APP SDK](https://github.com/fireice-uk/xmr-stak/issues/1511)	- available under various names as a package on different GNU/Linux distributions
 
 Optional:
 
