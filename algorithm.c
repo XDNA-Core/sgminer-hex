@@ -1048,7 +1048,7 @@ static cl_int queue_hex_kernel(struct __clState *clState, struct _dev_blk_ctx *b
 		
 	}
 
-	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, (threads+2)*sizeof(uint32_t)*16, NULL, &status); // we don't need that much just tired...
+	clState->MidstateBuf = clCreateBuffer(clState->context, CL_MEM_READ_WRITE, ((threads+1)*16+1)*sizeof(uint32_t), NULL, &status); // we don't need that much just tired...
 	if (status != CL_SUCCESS && !clState->MidstateBuf) {
 		applog(LOG_DEBUG, "Error %d: clCreateBuffer (MidstateBuf), decrease TC or increase LG", status);
 		return NULL;
@@ -1196,22 +1196,26 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	cl_event *events = (cl_event*)malloc(sizeof(cl_event) * 64);
 	hex_getalgolist(&clState->cldata[4], hashOrder);
 	//cl_uint* hashTable = new cl_uint[(*globalThreads + 2) * 16];
-	uint32_t *algoHashes = (uint32_t*)malloc(sizeof(uint32_t));
-	*algoHashes = 0;
+	uint32_t *algoHashes = (uint32_t*)malloc(sizeof(uint32_t)*16);
+
+
+	//uint32_t* test = (uint32_t*)malloc(((*globalThreads) * 16 + 1) * sizeof(uint32_t));
+
 
 	uint32_t zero = 0;
 	clEnqueueFillBuffer(clState->commandQueue, clState->MidstateBuf, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
-	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
+	status = clEnqueueWriteBuffer(clState->commandQueue, clState->MidstateBuf, 0, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS))
 	{
 		applog(LOG_ERR, "Error %d: Writing globalThreads (clEnqueueWriteBuffer)", status);
 		return status;
 	}
-	clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, CL_TRUE, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
+	clEnqueueWriteBuffer(clState->commandQueue, clState->buffer1, 0, 0, sizeof(globalThreads), globalThreads, 0, NULL, NULL);
+	clFinish(clState->commandQueue);
 	status = clEnqueueNDRangeKernel(clState->commandQueue,
 		clState->extra_kernels[hashOrder[0]],
 		1, p_global_work_offset,
-		globalThreads, localThreads, 0, NULL, &events[0]);
+		globalThreads, localThreads, 0, NULL,NULL);
 	if (unlikely(status != CL_SUCCESS))
 	{
 		applog(LOG_ERR, "Error %d: Enqueueing kernel onto command queue. (clEnqueueNDRangeKernel) - 80 part", status);
@@ -1222,16 +1226,16 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 	{
 		applog(LOG_ERR, "-");
 	}
-	status = clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, &events[1]);
+	status = clEnqueueFillBuffer(clState->commandQueue, clState->buffer1, &zero, sizeof(zero), sizeof(zero), ((*globalThreads) * 16 + 1) * sizeof(uint32_t), 0, NULL, NULL);
 	if (unlikely(status != CL_SUCCESS))
 	{
 		applog(LOG_ERR, "Error %d: Fill buffer1 after 80part", status);
 		return status;
 	}
-	clWaitForEvents(2, events);
+	clFinish(clState->commandQueue);
 	//status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, CL_TRUE, 0, sizeof(cl_uint)*(*globalThreads) * 16+2, hashTable,0, NULL, &events[0]);
 
-
+	//clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, 0, ((*globalThreads) * 16 + 1) * sizeof(uint32_t), test, 0, NULL, NULL);
 	size_t globalt = (*globalThreads);
 	size_t localt = (*localThreads);
 	size_t callCount = 0;
@@ -1241,24 +1245,26 @@ static cl_int enqueue_hex_kernels(struct __clState *clState,
 
 		int evc = 0;
 		uint32_t summ = 0;
+
+		for(int kip=0;kip<16;kip++)
+			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, 0, sizeof(uint32_t)*(kip*globalt + 1), sizeof(uint32_t), &algoHashes[kip], 0, NULL, NULL);
+		clFinish(clState->commandQueue);
 		for (int ki = 0; ki < 16; ki++)
 		{
 			int launchki = ki + 16;
 
-
-			status = clEnqueueReadBuffer(clState->commandQueue, clState->MidstateBuf, true, sizeof(uint32_t)*(ki*globalt + 1), sizeof(uint32_t), algoHashes, 0, NULL, NULL);
-			summ += *algoHashes;
-			if (*algoHashes > globalt)
+			summ += algoHashes[ki];
+			if (algoHashes[ki] > globalt)
 			{
-				applog(LOG_ERR, "Buffer problems algoHashes. Ri=%d, algoCount=%d, globalThreads=%d", ki, *algoHashes, globalt);
+				applog(LOG_ERR, "Buffer problems algoHashes. Ri=%d, algoCount=%d, globalThreads=%d", ki, algoHashes[ki], globalt);
 				return -1;
 			}
 			if (summ > globalt)
 			{
-				applog(LOG_ERR, "Buffer problems summ. Ri=%d, algoCount=%d, globalThreads=%d", ki, *algoHashes, globalt);
+				applog(LOG_ERR, "Buffer problems summ. Ri=%d, algoCount=%d, globalThreads=%d", ki, algoHashes[ki], globalt);
 				return -1;
 			}
-			callCount = algoHashes[0];
+			callCount = algoHashes[ki];
 
 
 			if (algoHashes[0] > 0) {
